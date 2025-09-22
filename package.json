@@ -1,0 +1,26 @@
+{
+  "name": "dynamic-favicon",
+  "version": "1.0.0",
+  "description": "A lightweight, zero-dependency library to automatically change your website's favicon based on time, themes, or custom inputs.",
+  "main": "./dist/dynamic-favicon.umd.js",
+  "module": "./dist/dynamic-favicon.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/dynamic-favicon.es.js",
+      "require": "./dist/dynamic-favicon.umd.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.20"
+  },
+  "author": "Sanjay Choudhary",
+  "license": "MIT"
+}
