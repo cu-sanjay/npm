@@ -1,13 +1,15 @@
 {
   "name": "dynamic-favicon",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A lightweight, zero-dependency library to automatically change your website's favicon based on time, themes, or custom inputs.",
   "main": "./dist/dynamic-favicon.umd.js",
   "module": "./dist/dynamic-favicon.es.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/dynamic-favicon.es.js",
-      "require": "./dist/dynamic-favicon.umd.js"
+      "require": "./dist/dynamic-favicon.umd.js",
+      "types": "./dist/index.d.ts"
     }
   },
   "files": [
@@ -15,12 +17,32 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && tsc",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "typescript": "^5.5.3",
     "vite": "^5.4.20"
   },
+  "keywords": [
+    "favicon",
+    "dynamic-favicon",
+    "animate-favicon",
+    "emoji",
+    "notification",
+    "badge",
+    "vanilla-js",
+    "zero-dependency",
+    "dom"
+  ],
   "author": "Sanjay Choudhary",
-  "license": "MIT"
+  "license": "MIT",
+  "homepage": "https://github.com/cu-sanjay/npm-favicon-rotator#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cu-sanjay/npm-favicon-rotator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cu-sanjay/npm-favicon-rotator/issues"
+  }
 }
