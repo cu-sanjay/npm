@@ -1,6 +1,15 @@
 let originalFavicon = null;
 let faviconElement = null;
 
+// NEW function to export the original for our badge logic
+export function getOriginalFavicon() {
+  if (originalFavicon === null) {
+      // Ensure it's been captured at least once
+      getFaviconElement();
+  }
+  return originalFavicon;
+}
+
 /**
  * Finds or creates the favicon link element in the document's head.
  */

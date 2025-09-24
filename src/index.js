@@ -1,82 +1,162 @@
-import { emojiToDataURL } from './utils.js';
-import { EMOJI_THEMES } from './themes.js';
-import { setFavicon, restoreFavicon } from './favicon-manager.js';
+import { renderFavicon } from './renderer.js';
+import { EMOJI_THEMES, ANIMATION_THEMES } from './themes.js';
+import { setFavicon, restoreFavicon, getOriginalFavicon } from './favicon-manager.js';
 
 export default class DynamicFavicon {
   constructor(options = {}) {
-    // Default options
     this.options = {
-      mode: 'emoji', // 'emoji', 'icon', 'custom'
+      mode: 'emoji', // 'emoji', 'animation', 'custom', 'badge'
       theme: 'time_of_day',
       custom: [],
-      interval: 60 * 60 * 1000, // 1 hour
+      badge: null, // e.g., { value: '!', background: '#4285F4' }
+      interval: 3600000,
       ...options,
     };
 
     this.timer = null;
     this.currentIndex = 0;
-    this.faviconQueue = this._createFaviconQueue();
+    this.isRunning = false;
+    this.preloadedIcons = {}; // Cache for preloaded custom icons
+
+    this._handleVisibilityChange = this._handleVisibilityChange.bind(this);
   }
 
   /**
-   * Creates the list of favicons to cycle through based on options.
+   * Preloads custom icon URLs to ensure they exist before use.
    * @private
    */
-  _createFaviconQueue() {
+  async _preloadCustomIcons() {
+    const promises = this.options.custom.map(url => {
+      if (this.preloadedIcons[url]) return Promise.resolve(); // Already loaded or failed
+      return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+          this.preloadedIcons[url] = img;
+          resolve();
+        };
+        img.onerror = () => {
+          console.warn(`[DynamicFavicon] Failed to load icon: ${url}. Skipping.`);
+          this.preloadedIcons[url] = null; // Mark as failed
+          resolve();
+        };
+        img.src = url;
+      });
+    });
+    await Promise.all(promises);
+  }
+
+  /**
+   * The core update loop.
+   * @private
+   */
+  async _update() {
+    if (!this.isRunning) return;
+
+    let faviconUrl = '';
+    const currentFavicon = getOriginalFavicon();
+
     switch (this.options.mode) {
-      case 'custom':
-        return this.options.custom;
+      case 'custom': {
+        const validIcons = this.options.custom.filter(url => this.preloadedIcons[url]);
+        if (validIcons.length > 0) {
+          const iconUrl = validIcons[this.currentIndex % validIcons.length];
+          faviconUrl = iconUrl;
+          this.currentIndex++;
+        }
+        break;
+      }
+      case 'animation': {
+        const theme = ANIMATION_THEMES[this.options.theme] || ANIMATION_THEMES.spinner;
+        const frame = theme[this.currentIndex % theme.length];
+        faviconUrl = renderFavicon({ emoji: frame });
+        this.currentIndex++;
+        break;
+      }
+      case 'badge': {
+        const baseIcon = new Image();
+        baseIcon.crossOrigin = 'Anonymous';
+        await new Promise(resolve => {
+          baseIcon.onload = resolve;
+          baseIcon.onerror = resolve; // Continue even if original fails
+          baseIcon.src = currentFavicon;
+        });
+        faviconUrl = renderFavicon({ icon: baseIcon, badge: this.options.badge });
+        break;
+      }
       case 'emoji':
-      default:
-        return EMOJI_THEMES[this.options.theme] || EMOJI_THEMES['time_of_day'];
-    }
-  }
-
-  /**
-   * The core update loop. Sets the favicon and schedules the next update.
-   * @private
-   */
-  _update() {
-    if (!this.faviconQueue || this.faviconQueue.length === 0) return;
-
-    let faviconData;
-
-    // Special logic for time_of_day theme
-    if (this.options.theme === 'time_of_day') {
-      const hour = new Date().getHours();
-      if (hour >= 21 || hour < 6) faviconData = this.faviconQueue[3];  // Moon
-      else if (hour >= 18)        faviconData = this.faviconQueue[2];  // Sunset
-      else if (hour >= 6)         faviconData = this.faviconQueue[1];  // Sun
-      else                        faviconData = this.faviconQueue[0];  // Sunrise
-    } else {
-      faviconData = this.faviconQueue[this.currentIndex];
-      this.currentIndex = (this.currentIndex + 1) % this.faviconQueue.length;
+      default: {
+        const theme = EMOJI_THEMES[this.options.theme] || EMOJI_THEMES.time_of_day;
+        // ... (time_of_day logic remains the same)
+        const hour = new Date().getHours();
+        let emoji;
+        if (this.options.theme === 'time_of_day') {
+           if (hour >= 21 || hour < 6) emoji = theme[3];
+           else if (hour >= 18) emoji = theme[2];
+           else if (hour >= 6) emoji = theme[1];
+           else emoji = theme[0];
+        } else {
+           emoji = theme[this.currentIndex % theme.length];
+           this.currentIndex++;
+        }
+        faviconUrl = renderFavicon({ emoji });
+        break;
+      }
     }
     
-    // Generate data URL if it's an emoji
-    const finalUrl = this.options.mode === 'emoji' ? emojiToDataURL(faviconData) : faviconData;
-    setFavicon(finalUrl);
-
-    // Schedule the next update
-    this.timer = setTimeout(() => this._update(), this.options.interval);
+    if (faviconUrl) {
+        setFavicon(faviconUrl);
+    }
+    
+    // Schedule next update only if not in badge mode (badge is a one-off)
+    if (this.options.mode !== 'badge' && this.isRunning) {
+      this.timer = setTimeout(() => this._update(), this.options.interval);
+    }
   }
 
   /**
    * Starts the dynamic favicon updates.
    */
-  start() {
-    this.stop(); // Ensure no multiple loops are running
+  async start() {
+    this.isRunning = true;
+    document.addEventListener('visibilitychange', this._handleVisibilityChange);
+    
+    if (this.options.mode === 'custom') {
+      await this._preloadCustomIcons();
+    }
+    
     this._update();
   }
 
   /**
-   * Stops the dynamic favicon updates and restores the original.
+   * Stops the updates and restores the original favicon.
    */
   stop() {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.isRunning = false;
+    clearTimeout(this.timer);
+    this.timer = null;
+    document.removeEventListener('visibilitychange', this._handleVisibilityChange);
     restoreFavicon();
+  }
+  
+  /**
+   * Updates the badge value dynamically.
+   * @param {string|number} value - The new value for the badge.
+   */
+  updateBadge(value) {
+    this.options.badge = { ...this.options.badge, value };
+    this.options.mode = 'badge';
+    this._update();
+  }
+  
+  /**
+   * Pauses or resumes updates when tab visibility changes.
+   * @private
+   */
+  _handleVisibilityChange() {
+    if (document.hidden) {
+      clearTimeout(this.timer);
+    } else if (this.isRunning && this.options.mode !== 'badge') {
+      this._update();
+    }
   }
 }
